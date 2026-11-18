@@ -1,0 +1,11 @@
+# Cloudflare Pages headers (https://developers.cloudflare.com/pages/configuration/headers/)
+# The hand/face/selfie models and the MediaPipe engine are large (~40 MB) and rarely change,
+# so browsers may keep them for a day instead of downloading them on every visit.
+/mediapipe/*
+  Cache-Control: public, max-age=86400
+/models/*
+  Cache-Control: public, max-age=86400
+/assets/*
+  Cache-Control: public, max-age=86400
+/costume/*
+  Cache-Control: public, max-age=86400

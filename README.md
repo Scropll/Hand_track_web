@@ -85,6 +85,23 @@ Each spell has its own effect on the particles: Lumos lights the wand tip, Nox d
 - Gesture strengths and sizes: `buildForces()` in `src/main.ts`
 - Color themes: `PALETTES` in `src/particles.ts`
 
-## Sharing it
+## Publishing it (Cloudflare Pages, free)
 
-`npm run build` creates a `dist/` folder you can upload to any static host (Netlify, Vercel, GitHub Pages). Browsers only allow camera access over **https** or on localhost.
+The site is published from GitHub by Cloudflare Pages. Every time a pull request is merged into `main`, Cloudflare rebuilds and republishes it automatically, usually in 1–2 minutes.
+
+One-time setup:
+1. Sign up or log in at [dash.cloudflare.com](https://dash.cloudflare.com) (the free plan is enough).
+2. Go to **Workers & Pages → Create → Pages → Import an existing Git repository** (the wording in Cloudflare's dashboard may differ slightly).
+3. Connect your GitHub account and choose the **Hand_track_web** repository.
+4. Build settings:
+   - Framework preset: **Vite** (or None)
+   - Build command: `npm run build`
+   - Build output directory: `dist`
+   - Production branch: `main`
+5. Click **Save and Deploy**. When it finishes you get an address like `https://hand-track-web.pages.dev`.
+
+Notes:
+- Camera access needs https, and `*.pages.dev` is https, so the camera works there.
+- `.node-version` makes Cloudflare build with Node.js 22.
+- `public/_headers` lets browsers keep the large tracking models for a day.
+- Every pull request also gets its own preview address, shown in Cloudflare's dashboard.
