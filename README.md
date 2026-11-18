@@ -28,6 +28,17 @@ With **Dim: On**, a cool teal tint and a dark vignette surround you. The area ar
 
 MediaPipe **Face Landmarker** puts a wizard hat on your head. The visible hat is 1.3× your face width, measured between face points 234 and 454. Its bottom edge sits just above your forehead (point 10). It keeps the image's original proportions, tilts with your head, and is smoothed so it doesn't shake. Use the **Hat: On/Off** button to toggle it. The image is `public/costume/harry_potter_hat.webp`, and the fitting settings are at the top of `src/hat.ts`.
 
+## Wand tip tracking
+
+Put a strip of bright colored tape (neon green by default) on the tip of your wand. A glowing gold trail follows the tip and fades over about half a second. The panel shows **Wand: tracked** or **Wand: lost**.
+
+- **Color tracking:** each camera frame is checked for pixels in the tape's HSV color range, and the densest patch of them is the tip.
+- **Calibrate wand:** click the button, then click the wand tip on screen. Its color and a matching tolerance are sampled and saved in your browser. The dot on the button shows the color being tracked. Press Esc to cancel.
+- **Fallback:** if the color isn't visible, the tip is estimated from your hand: a line from the wrist through the index knuckle, about 1.5× your hand's length. The panel then says *estimated from hand*.
+- **Smoothing:** the position is eased (lerped) toward each new reading to remove jitter. Fast moves catch up quicker.
+
+Settings are at the top of `src/wand.ts` (default color, `WAND_LENGTH`, blob size limits) and `src/wandTrail.ts` (`TRAIL_MS`, width, gold color).
+
 ## Files
 
 - `src/handTracking.ts` – webcam + MediaPipe model loading
@@ -35,6 +46,8 @@ MediaPipe **Face Landmarker** puts a wizard hat on your head. The visible hat is
 - `src/particles.ts` – particle physics and the glow shader
 - `src/skeleton.ts` – the faint hand outline
 - `src/hat.ts` – wizard hat placed with face tracking
+- `src/wand.ts` – wand tip tracking (HSV color, calibration, hand fallback, smoothing)
+- `src/wandTrail.ts` – the glowing gold trail behind the wand tip
 - `src/main.ts` – connects everything, runs once per frame
 - `public/` – the MediaPipe engine (`wasm/`) and hand model, served locally
 

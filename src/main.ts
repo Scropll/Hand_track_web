@@ -6,6 +6,8 @@ import { Vignette } from './vignette';
 import { classifyGesture, GestureStabilizer, GESTURE_LABELS, type Gesture, type Point2 } from './gestures';
 import { ParticleField, PALETTES, type Force, type RainZone } from './particles';
 import { HandSkeleton } from './skeleton';
+import { profileColor, WandTracker } from './wand';
+import { WandTrail } from './wandTrail';
 
 // ---------- Page elements ----------
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -19,6 +21,8 @@ const statusEl = $('status');
 const dimBtn = $<HTMLButtonElement>('toggle-dim');
 const hatBtn = $<HTMLButtonElement>('toggle-hat');
 const paletteBtn = $<HTMLButtonElement>('next-palette');
+const wandBtn = $<HTMLButtonElement>('calibrate-wand');
+const wandStatusEl = $('wand-status');
 const legendItems = [...document.querySelectorAll<HTMLLIElement>('#legend li')];
 
 // ---------- Three.js scene ----------
@@ -43,6 +47,10 @@ scene.add(particles.points);
 const skeletons = [new HandSkeleton(), new HandSkeleton()];
 skeletons.forEach((s) => scene.add(s.group));
 
+const wand = new WandTracker();
+const wandTrail = new WandTrail();
+scene.add(wandTrail.group);
+
 let aspect = 1;
 function resize() {
   const w = window.innerWidth;
@@ -56,6 +64,7 @@ function resize() {
   camera.updateProjectionMatrix();
   particles.setBounds(aspect, 1);
   particles.setPointSize(3.2 * dpr * Math.max(0.7, h / 900));
+  wandTrail.setPixelRatio(dpr);
 }
 window.addEventListener('resize', resize);
 resize();
@@ -87,6 +96,16 @@ function toScreen(nx: number, ny: number): Point2 {
   const dw = video.videoWidth * scale;
   const dh = video.videoHeight * scale;
   return { x: W - (nx * dw - (dw - W) / 2), y: ny * dh - (dh - H) / 2 }; // x is mirrored
+}
+
+/** The reverse of toScreen: screen pixels → camera image coordinates (0..1). */
+function fromScreen(sx: number, sy: number): Point2 {
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const scale = Math.max(W / video.videoWidth, H / video.videoHeight);
+  const dw = video.videoWidth * scale;
+  const dh = video.videoHeight * scale;
+  return { x: (W - sx + (dw - W) / 2) / dw, y: (sy + (dh - H) / 2) / dh };
 }
 
 /** Same as toScreen, but in the 3D scene's coordinates (x: -aspect..aspect, y: -1..1). */
@@ -227,7 +246,9 @@ function frame() {
   // Only run hand tracking when the camera has produced a new frame.
   if (landmarker && video.readyState >= 2 && video.currentTime !== lastVideoTime) {
     lastVideoTime = video.currentTime;
-    handleResult(landmarker.detectForVideo(video, now), now);
+    const handResult = landmarker.detectForVideo(video, now);
+    handleResult(handResult, now);
+    wand.detect(video, handResult.landmarks, now);
     // Face tracking feeds both the hat and the vignette; it's skipped when neither is on.
     if (faceLandmarker && (hat.enabled || vignette.enabled)) {
       const face = faceLandmarker.detectForVideo(video, now).faceLandmarks[0];
@@ -265,6 +286,9 @@ function frame() {
 
   particles.update(dt, time, forces, rain);
 
+  wand.update(dt, now);
+  wandTrail.update(wand.pos && toWorld(wand.pos.x, wand.pos.y), now, time);
+
   const handList = [...hands.values()];
   skeletons.forEach((s, i) => (handList[i] ? s.update(handList[i].world) : s.hide()));
   updateHud();
@@ -289,7 +313,20 @@ function updateHud() {
     statusEl.textContent = lastHudText = text;
     legendItems.forEach((li) => li.classList.toggle('active', active.has(li.dataset.gesture as Gesture)));
   }
+
+  const wandText = calibrating
+    ? `Wand: ${calibrationHint}`
+    : wand.source === 'color'
+      ? 'Wand: tracked'
+      : wand.source === 'hand'
+        ? 'Wand: tracked (estimated from hand)'
+        : 'Wand: lost';
+  if (wandText !== lastWandText) {
+    wandStatusEl.textContent = lastWandText = wandText;
+    wandStatusEl.dataset.state = calibrating ? 'calibrating' : wand.source;
+  }
 }
+let lastWandText = '';
 
 // ---------- Buttons ----------
 startBtn.addEventListener('click', async () => {
@@ -339,3 +376,37 @@ dimBtn.addEventListener('click', () => {
   dimBtn.setAttribute('aria-pressed', String(vignette.enabled));
 });
 paletteBtn.addEventListener('click', nextPalette);
+
+// ---------- Wand calibration ----------
+// Click "Calibrate wand", then click the wand tip on the video: its color becomes the tracked color.
+const CALIBRATION_HINT = 'click the wand tip on screen (Esc to cancel)';
+let calibrating = false;
+let calibrationHint = CALIBRATION_HINT;
+function setCalibrating(on: boolean) {
+  calibrating = on;
+  calibrationHint = CALIBRATION_HINT;
+  document.body.classList.toggle('calibrating', on);
+  wandBtn.setAttribute('aria-pressed', String(on));
+  wandBtn.textContent = on ? 'Cancel calibration' : 'Calibrate wand';
+}
+function showWandColor() {
+  wandBtn.style.setProperty('--wand-color', profileColor(wand.profile));
+}
+showWandColor();
+
+wandBtn.addEventListener('click', () => setCalibrating(!calibrating));
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && calibrating) setCalibrating(false);
+});
+window.addEventListener('pointerdown', (e) => {
+  if (!calibrating || hud.contains(e.target as Node)) return;
+  e.preventDefault();
+  const p = fromScreen(e.clientX, e.clientY);
+  const problem = wand.calibrate(video, p.x, p.y);
+  if (problem) {
+    calibrationHint = `${problem} (Esc to cancel)`;
+    return; // stay in calibration mode so you can click again
+  }
+  setCalibrating(false);
+  showWandColor();
+});

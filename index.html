@@ -31,6 +31,7 @@
     <!-- On-screen guide, shown after the camera starts -->
     <aside id="hud" hidden>
       <div id="status">Loading hand tracking…</div>
+      <div id="wand-status" data-state="none">Wand: lost</div>
       <ul id="legend">
         <li data-gesture="relaxed"><span>👆</span> Any hand: particles follow your index finger</li>
         <li data-gesture="point"><span>☝️</span> Point: a bigger swarm follows your fingertip</li>
@@ -43,6 +44,7 @@
         <button id="toggle-dim" type="button" aria-pressed="true">Dim: On</button>
         <button id="toggle-hat" type="button" aria-pressed="true">Hat: On</button>
         <button id="next-palette" type="button">Colors: Blue</button>
+        <button id="calibrate-wand" type="button" aria-pressed="false">Calibrate wand</button>
       </div>
     </aside>
 

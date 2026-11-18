@@ -122,6 +122,41 @@ button:disabled { opacity: 0.5; cursor: progress; }
 }
 #hud[hidden] { display: none; }
 #status { color: var(--accent); margin-bottom: 8px; font-weight: 600; }
+#wand-status {
+  margin: -4px 0 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+#wand-status::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 50%;
+  vertical-align: 1px;
+  background: #ff5c6c;
+}
+#wand-status[data-state="color"] { color: #ffd76a; }
+#wand-status[data-state="color"]::before { background: #ffc12e; box-shadow: 0 0 8px #ffc12e; }
+#wand-status[data-state="hand"] { color: #e8d39a; }
+#wand-status[data-state="hand"]::before { background: #c9a548; }
+#wand-status[data-state="calibrating"] { color: var(--text); }
+#wand-status[data-state="calibrating"]::before { background: var(--accent); }
+
+/* Small swatch of the color being tracked. */
+#calibrate-wand::before {
+  content: "";
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--wand-color, #39ff14);
+}
+#calibrate-wand[aria-pressed="true"] { background: rgba(124, 243, 255, 0.22); border-color: var(--accent); }
+body.calibrating, body.calibrating #stage canvas { cursor: crosshair; }
+
 #legend { list-style: none; margin: 0 0 10px; padding: 0; }
 #legend li {
   color: var(--muted);
