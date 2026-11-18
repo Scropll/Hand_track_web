@@ -34,7 +34,8 @@ Put a strip of bright colored tape (neon green by default) on the tip of your wa
 
 - **Color tracking:** each camera frame is checked for pixels in the tape's HSV color range, and the densest patch of them is the tip.
 - **Calibrate wand:** click the button, then click the wand tip on screen. Its color and a matching tolerance are sampled and saved in your browser. The dot on the button shows the color being tracked. Press Esc to cancel.
-- **Fallback:** if the color isn't visible, the tip is estimated from your hand: a line from the wrist through the index knuckle, about 1.5× your hand's length. The panel then says *estimated from hand*.
+- **Fallback:** if the color isn't visible, your index fingertip is used as the wand tip, so you can play without a wand. The panel then says *index fingertip*.
+- **Cursor:** a small glowing dot shows exactly where the wand tip is being tracked (gold for the colored tip, white for the fingertip).
 - **Smoothing:** the position is eased (lerped) toward each new reading to remove jitter. Fast moves catch up quicker.
 
 Settings are at the top of `src/wand.ts` (default color, `WAND_LENGTH`, blob size limits) and `src/wandTrail.ts` (`TRAIL_MS`, width, gold color).
@@ -43,12 +44,12 @@ Settings are at the top of `src/wand.ts` (default color, `WAND_LENGTH`, blob siz
 
 Click **📖 Spellbook** to open a grid of 21 spells, traced from *A Beginner's Guide to Wand Motions*. Each card shows the wand motion (a dot where it starts, an arrow where it ends), the spell's name and what it does. Choose a spell by clicking it, or by holding your wand tip over its card for 1.5 seconds while a gold ring fills.
 
-In **practice mode**, a panel at the top shows the motion with a moving spark tracing it. Draw the shape with your wand tip. The *Match* bar shows how close you are, and the spell casts when it is close enough. Size and position don't matter, but direction does, so start at the dot. **Back to Spellbook** picks another spell; **Exit practice** closes the panel.
+In **practice mode** the spell's motion is drawn large in the middle of the screen. Touch the pulsing start dot with your wand tip, then follow the line: the part you've traced fills in glowing gold and *Match %* climbs to 100%. Stay within the faint corridor around the line (about 8% of the screen width). If you leave it for more than half a second, the gold drains away and it says *Try again*. At 100% the screen flashes gold, the spell's name appears, its effect plays, and after 2.5 seconds you're back in the Spellbook. While practicing, the particles dim to 30% and the gesture panel is hidden; **← Spellbook**, **Exit** or Esc leave practice.
 
 Each spell has its own effect on the particles: Lumos lights the wand tip, Nox darkens the screen, Ascendio/Descendo make the particles rise/fall, Reparo gathers them in the middle, Stupefy fires a red bolt, Expelliarmus blasts outward, Finite Incantatem ends every effect, and so on.
 
 - **Edit spells in `src/spells.js`:** shapes (points in a 0–1 box, y going down; add `'corner'` to keep a corner sharp), names, descriptions, colors and which effect each one uses.
-- **How strict matching is:** `CAST_THRESHOLD` in `src/practice.ts` (0.72; straight lines like Lumos/Nox need 0.9).
+- **How strict tracing is:** `CORRIDOR`, `OFF_PATH_MS` and `GUIDE_SIZE` at the top of `src/practice.ts`.
 - **Effects:** `src/spellEffects.ts`.
 
 ## Files
@@ -61,9 +62,9 @@ Each spell has its own effect on the particles: Lumos lights the wand tip, Nox d
 - `src/wand.ts` – wand tip tracking (HSV color, calibration, hand fallback, smoothing)
 - `src/wandTrail.ts` – the glowing gold trail behind the wand tip
 - `src/spells.js` – all spells: wand motion paths, text, colors, effect
-- `src/spellPath.ts` – Catmull-Rom smoothing and matching a stroke to a spell's shape
+- `src/spellPath.ts` – Catmull-Rom smoothing of the spell paths
 - `src/spellbook.ts` – the Spellbook menu (click or wand-hover to choose)
-- `src/practice.ts` – practice mode: watches the wand and casts when the shape matches
+- `src/practice.ts` – practice mode: the big guide symbol and following it with the wand
 - `src/spellEffects.ts` – what each spell does to the particles and screen
 - `src/main.ts` – connects everything, runs once per frame
 - `public/` – the MediaPipe engine (`wasm/`) and hand model, served locally

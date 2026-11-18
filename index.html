@@ -27,6 +27,9 @@
     <!-- Three.js puts its <canvas> in here -->
     <div id="stage"></div>
 
+    <!-- Practice mode: the big spell symbol to trace -->
+    <canvas id="guide" hidden></canvas>
+
     <!-- Start screen -->
     <section id="intro" class="panel">
       <h1>Hand Particles</h1>
@@ -58,21 +61,20 @@
     </aside>
 
     <!-- Practice mode: one spell to trace with the wand -->
-    <section id="practice" class="glass" hidden aria-live="polite">
-      <div class="practice-art"></div>
-      <div class="practice-info">
-        <div class="eyebrow">Practice · <span class="practice-kind"></span></div>
-        <h2 class="practice-name"></h2>
-        <p class="practice-desc"></p>
-        <div class="meter" aria-hidden="true"><div class="meter-fill"></div></div>
-        <div class="meter-label">Match 0%</div>
-        <p class="practice-count"></p>
-        <div class="practice-actions">
-          <button id="back-to-spellbook" type="button">Back to Spellbook</button>
-          <button id="exit-practice" type="button">Exit practice</button>
-        </div>
+    <section id="practice" class="glass" hidden>
+      <h2 class="practice-name"></h2>
+      <p class="practice-desc"></p>
+      <div class="meter" aria-hidden="true"><div class="meter-fill"></div></div>
+      <div class="practice-foot">
+        <span class="meter-label">Match 0%</span>
+        <span class="practice-status" aria-live="polite"></span>
       </div>
     </section>
+    <!-- Ways out of practice (the usual panel is hidden while practicing) -->
+    <div id="practice-nav" class="glass" hidden>
+      <button id="back-to-spellbook" type="button">← Spellbook</button>
+      <button id="exit-practice" type="button" aria-label="Exit practice">Exit</button>
+    </div>
 
     <!-- Big spell name shown when a spell is cast -->
     <div id="cast-banner" aria-live="assertive"></div>

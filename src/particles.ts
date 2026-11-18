@@ -59,6 +59,7 @@ const vertexShader = /* glsl */ `
 `;
 
 const fragmentShader = /* glsl */ `
+  uniform float uOpacity;
   varying vec3 vColor;
   varying float vGlow;
 
@@ -68,7 +69,7 @@ const fragmentShader = /* glsl */ `
     float r = 1.0 - d * 2.0;
     float core = pow(r, 3.0);        // bright center
     float halo = pow(r, 1.2) * 0.35; // soft glow around it
-    gl_FragColor = vec4(vColor * vGlow, core + halo);
+    gl_FragColor = vec4(vColor * vGlow, (core + halo) * uOpacity);
   }
 `;
 
@@ -81,6 +82,7 @@ export class ParticleField {
   private readonly material: THREE.ShaderMaterial;
   private readonly targetColors = [new THREE.Color(), new THREE.Color(), new THREE.Color()];
   private emitCursor = 0;
+  private targetOpacity = 1;
   private bx = 1;
   private by = 1;
 
@@ -109,6 +111,7 @@ export class ParticleField {
         uC1: { value: c1 },
         uC2: { value: c2 },
         uC3: { value: c3 },
+        uOpacity: { value: 1 },
       },
       transparent: true,
       depthWrite: false,
@@ -127,6 +130,11 @@ export class ParticleField {
 
   setPointSize(px: number) {
     this.material.uniforms.uSize.value = px;
+  }
+
+  /** Fades all particles toward this brightness (1 = normal), e.g. 0.3 to calm the screen. */
+  setOpacity(opacity: number) {
+    this.targetOpacity = opacity;
   }
 
   /** Fades to a new color theme over the next second or so. */
@@ -307,5 +315,6 @@ export class ParticleField {
     (u.uC1.value as THREE.Color).lerp(this.targetColors[0], blend);
     (u.uC2.value as THREE.Color).lerp(this.targetColors[1], blend);
     (u.uC3.value as THREE.Color).lerp(this.targetColors[2], blend);
+    u.uOpacity.value += (this.targetOpacity - u.uOpacity.value) * (1 - Math.exp(-3 * dt));
   }
 }

@@ -1,6 +1,5 @@
 /**
- * Spell path geometry: turning the config points into smooth curves, and
- * comparing a drawn wand stroke against a spell's shape.
+ * Spell path geometry: turning the config points into smooth curves.
  */
 
 export interface Pt {
@@ -88,91 +87,6 @@ export function resample(pts: readonly Pt[], n: number, from = 0, to = pts.lengt
   }
   while (out.length < n) out.push({ ...pts[to - 1] });
   return out;
-}
-
-/**
- * Centers a path on its bounding box and scales its longest side to 1.
- * Proportions are kept, so a tall line stays a tall line.
- */
-export function normalize(pts: readonly Pt[]): Pt[] {
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (const p of pts) {
-    x0 = Math.min(x0, p.x);
-    y0 = Math.min(y0, p.y);
-    x1 = Math.max(x1, p.x);
-    y1 = Math.max(y1, p.y);
-  }
-  const s = Math.max(x1 - x0, y1 - y0) || 1;
-  const cx = (x0 + x1) / 2;
-  const cy = (y0 + y1) / 2;
-  return pts.map((p) => ({ x: (p.x - cx) / s, y: (p.y - cy) / s }));
-}
-
-export const SAMPLES = 40;
-
-/** A spell's shape, prepared once for fast matching. */
-export function makeTemplate(points: readonly PathPoint[]): Pt[] {
-  return normalize(resample(smoothPath(points), SAMPLES));
-}
-
-/** Average distance between matching points of two prepared shapes (0 = identical). */
-function distance(a: readonly Pt[], b: readonly Pt[]): number {
-  let d = 0;
-  for (let i = 0; i < a.length; i++) d += Math.hypot(a[i].x - b[i].x, a[i].y - b[i].y);
-  return d / a.length;
-}
-
-/** How far off a stroke can be and still count; a perfect copy scores 1, this distance scores 0. */
-const ZERO_SCORE_DISTANCE = 0.3;
-
-/**
- * How closely the stroke pts[from..to) matches a template, 0..1.
- * The direction matters (drawing a shape backwards doesn't count), but size and position don't.
- */
-export function matchScore(template: readonly Pt[], pts: readonly Pt[], from = 0, to = pts.length): number {
-  const raw = resample(pts, SAMPLES, from, to);
-  let best = Infinity;
-  // People draw shapes a little tilted and squashed, so try a few small tilts, and also
-  // stretching the stroke to the template's proportions. The closest fit counts.
-  for (const angle of TILTS) {
-    const r = angle ? rotate(raw, angle) : raw;
-    best = Math.min(best, distance(template, normalize(r)));
-    const stretched = stretchTo(r, template);
-    if (stretched) best = Math.min(best, distance(template, stretched) * STRETCH_PENALTY);
-  }
-  return Math.max(0, 1 - best / ZERO_SCORE_DISTANCE);
-}
-
-const TILTS = [0, -0.21, 0.21]; // radians, about ±12°
-const STRETCH_PENALTY = 1.1; // a stretched fit counts as slightly worse than a natural one
-
-function rotate(pts: readonly Pt[], a: number): Pt[] {
-  const c = Math.cos(a);
-  const s = Math.sin(a);
-  return pts.map((p) => ({ x: p.x * c - p.y * s, y: p.x * s + p.y * c }));
-}
-
-/**
- * Scales width and height separately so the stroke's box has the template's proportions.
- * Skipped for thin shapes (lines), where stretching a wobble would blow it up.
- */
-function stretchTo(pts: readonly Pt[], template: readonly Pt[]): Pt[] | null {
-  const box = (ps: readonly Pt[]) => {
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (const p of ps) {
-      x0 = Math.min(x0, p.x);
-      y0 = Math.min(y0, p.y);
-      x1 = Math.max(x1, p.x);
-      y1 = Math.max(y1, p.y);
-    }
-    return { x0, y0, w: x1 - x0, h: y1 - y0 };
-  };
-  const t = box(template);
-  const b = box(pts);
-  const tMax = Math.max(t.w, t.h);
-  const bMax = Math.max(b.w, b.h);
-  if (t.w < 0.25 * tMax || t.h < 0.25 * tMax || b.w < 0.25 * bMax || b.h < 0.25 * bMax) return null;
-  return pts.map((p) => ({ x: t.x0 + ((p.x - b.x0) / b.w) * t.w, y: t.y0 + ((p.y - b.y0) / b.h) * t.h }));
 }
 
 /** An SVG path string for drawing a spell's shape in a box of the given size. */

@@ -6,8 +6,8 @@ import type { Point2 } from './gestures';
  *
  * 1. Color: each camera frame is shrunk to a small image and every pixel is tested against an HSV
  *    color range (default: neon green tape). The densest patch of matching pixels is the tip.
- * 2. Fallback: if the color isn't visible, the tip is estimated from the hand: a line from the
- *    wrist through the index knuckle, about 1.5× the hand's length long.
+ * 2. Fallback: if the color isn't visible, the index fingertip is used as the wand tip,
+ *    so you can still play without a wand (or when the tape is hidden).
  * 3. The result is smoothed with a lerp so it doesn't jitter.
  *
  * Positions are in camera-image coordinates (0..1, not mirrored), like MediaPipe's landmarks.
@@ -31,8 +31,6 @@ const PROC_WIDTH = 240; // the camera frame is shrunk to this width before color
 const CELL = 6; // pixels per cell in the coarse search grid
 const MIN_PIXELS = 4; // fewer matching pixels than this counts as "not found"
 const MAX_PIXELS_FRACTION = 0.08; // a huge blob is a shirt or a wall, not tape
-const WAND_LENGTH = 1.5; // fallback: tip distance from the wrist, in hand lengths
-const PALM_TO_HAND = 1.8; // hand length ≈ 1.8 × wrist→middle-knuckle (works even when the fist is closed)
 const LOST_AFTER_MS = 250; // how long the tip may be missing before the wand counts as lost
 
 export class WandTracker {
@@ -57,8 +55,8 @@ export class WandTracker {
       this.setTarget(found, 'color', now);
       return;
     }
-    const est = this.estimateFromHands(video, hands);
-    if (est) this.setTarget(est, 'hand', now);
+    const tip = this.fingertip(hands);
+    if (tip) this.setTarget(tip, 'hand', now);
   }
 
   /** Call every rendered frame: eases the shown position toward the latest target. */
@@ -175,25 +173,13 @@ export class WandTracker {
     return n ? { x: (sx / n + 0.5) / w, y: (sy / n + 0.5) / h } : null;
   }
 
-  /** Fallback: extend wrist → index knuckle to where the wand tip should be. */
-  private estimateFromHands(video: HTMLVideoElement, hands: NormalizedLandmark[][]): Point2 | null {
-    const vw = video.videoWidth || 1;
-    const vh = video.videoHeight || 1;
+  /** Fallback: the index fingertip (hand landmark 8) acts as the wand tip. */
+  private fingertip(hands: NormalizedLandmark[][]): Point2 | null {
     let best: Point2 | null = null;
     let bestDist = Infinity;
     for (const lm of hands) {
-      // Work in pixels so the direction isn't skewed by the frame's aspect ratio.
-      const wrist = { x: lm[0].x * vw, y: lm[0].y * vh };
-      const knuckle = { x: lm[5].x * vw, y: lm[5].y * vh };
-      const middle = { x: lm[9].x * vw, y: lm[9].y * vh };
-      const dx = knuckle.x - wrist.x;
-      const dy = knuckle.y - wrist.y;
-      const len = Math.hypot(dx, dy);
-      if (len < 1) continue;
-      const handLen = Math.hypot(middle.x - wrist.x, middle.y - wrist.y) * PALM_TO_HAND;
-      const reach = WAND_LENGTH * handLen;
-      const tip = { x: (wrist.x + (dx / len) * reach) / vw, y: (wrist.y + (dy / len) * reach) / vh };
-      // With two hands, stay with the one the wand was already in.
+      const tip = { x: lm[8].x, y: lm[8].y };
+      // With two hands, stay with the one that was already being followed.
       const ref = this.pos ?? this.target;
       const d = ref ? Math.hypot(tip.x - ref.x, tip.y - ref.y) : 0;
       if (d < bestDist) {
