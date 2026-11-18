@@ -134,6 +134,51 @@ export class ParticleField {
     PALETTES[index].colors.forEach((c, i) => this.targetColors[i].set(c));
   }
 
+  /** Fades to any three colors (used by spells), like setPalette. */
+  setColors(colors: readonly string[]) {
+    colors.forEach((c, i) => this.targetColors[i].set(c));
+  }
+
+  /** Re-launches `n` particles from a point in one direction (radians), within ±spread. */
+  emitDirected(x: number, y: number, n: number, angle: number, spread: number, minSpeed: number, maxSpeed: number) {
+    for (let k = 0; k < n; k++) {
+      const i = this.emitCursor;
+      this.emitCursor = (this.emitCursor + 1) % this.count;
+      const a = angle + (Math.random() * 2 - 1) * spread;
+      const s = minSpeed + Math.random() * (maxSpeed - minSpeed);
+      this.pos[i * 3] = x;
+      this.pos[i * 3 + 1] = y;
+      this.vel[i * 2] = Math.cos(a) * s;
+      this.vel[i * 2 + 1] = Math.sin(a) * s;
+    }
+  }
+
+  /** Re-places `n` particles at random spots on screen, nearly still (a sparkle appearing). */
+  sprinkle(n: number, speed = 0.05) {
+    for (let k = 0; k < n; k++) {
+      const i = this.emitCursor;
+      this.emitCursor = (this.emitCursor + 1) % this.count;
+      this.pos[i * 3] = (Math.random() * 2 - 1) * this.bx;
+      this.pos[i * 3 + 1] = (Math.random() * 2 - 1) * this.by;
+      const a = Math.random() * Math.PI * 2;
+      this.vel[i * 2] = Math.cos(a) * speed;
+      this.vel[i * 2 + 1] = Math.sin(a) * speed;
+    }
+  }
+
+  /** Re-launches `n` particles from just below the bottom edge, rising, spread across x. */
+  sprout(n: number, minSpeed: number, maxSpeed: number) {
+    for (let k = 0; k < n; k++) {
+      const i = this.emitCursor;
+      this.emitCursor = (this.emitCursor + 1) % this.count;
+      this.pos[i * 3] = (Math.random() * 2 - 1) * this.bx;
+      this.pos[i * 3 + 1] = -this.by - 0.02;
+      const s = minSpeed + Math.random() * (maxSpeed - minSpeed);
+      this.vel[i * 2] = (Math.random() - 0.5) * 0.15;
+      this.vel[i * 2 + 1] = s;
+    }
+  }
+
   /** Re-launches `n` particles from a point, flying outward. */
   emit(x: number, y: number, n: number, minSpeed: number, maxSpeed: number) {
     for (let k = 0; k < n; k++) {
