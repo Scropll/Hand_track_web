@@ -1,4 +1,5 @@
 import type { Point2 } from './gestures';
+import type { Rect } from './portrait';
 import { resample, smoothPath, pathLength } from './spellPath';
 import type { Spell } from './spells.js';
 
@@ -55,6 +56,8 @@ export class Practice {
     private readonly canvas: HTMLCanvasElement,
     private readonly onSuccess: (spell: Spell, info: SuccessInfo) => void,
     private readonly onDone: () => void,
+    /** Where the camera picture is shown (the gold frame's opening in the Hall), or null for the full screen. */
+    private readonly getRegion: () => Rect | null = () => null,
   ) {
     this.ctx = canvas.getContext('2d')!;
     const q = (sel: string) => root.querySelector<HTMLElement>(sel)!;
@@ -193,8 +196,8 @@ export class Practice {
     }
   }
 
-  /** Places the spell's path large in the middle of the screen. */
-  private layout() {
+  /** Places the spell's path large in the middle of the screen (or of the portrait frame). */
+  layout() {
     if (!this.spell) return;
     const W = window.innerWidth;
     const H = window.innerHeight;
@@ -203,9 +206,16 @@ export class Practice {
     this.canvas.height = Math.round(H * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const size = Math.min(H * GUIDE_SIZE, W * 0.85);
-    const cx = W / 2;
-    const cy = H * 0.56; // a little low, leaving room for the card at the top
+    const region = this.getRegion();
+    let size = Math.min(H * GUIDE_SIZE, W * 0.85);
+    let cx = W / 2;
+    let cy = H * 0.56; // a little low, leaving room for the card at the top
+    if (region) {
+      // In the Hall, the symbol sits in the middle of the frame, over you.
+      size = Math.min(size, region.h * 0.9, region.w * 0.9);
+      cx = region.x + region.w / 2;
+      cy = region.y + region.h / 2;
+    }
     const curve = smoothPath(this.spell.path, 16).map((q) => ({ x: cx + (q.x - 0.5) * size, y: cy + (q.y - 0.5) * size }));
     const count = Math.max(2, Math.ceil(pathLength(curve) / GUIDE_SPACING));
     this.guide = resample(curve, count);

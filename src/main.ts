@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { FaceLandmarker, HandLandmarker, HandLandmarkerResult } from '@mediapipe/tasks-vision';
-import { createFaceLandmarker, createHandLandmarker, startCamera } from './handTracking';
+import { createFaceLandmarker, createHandLandmarker, createSelfieSegmenter, startCamera } from './handTracking';
+import { HALL, hallOpening, Portrait, type Rect } from './portrait';
 import { Hat } from './hat';
 import { Vignette } from './vignette';
 import { classifyGesture, GestureStabilizer, GESTURE_LABELS, type Gesture, type Point2 } from './gestures';
@@ -24,6 +25,7 @@ const hud = $('hud');
 const statusEl = $('status');
 const dimBtn = $<HTMLButtonElement>('toggle-dim');
 const hatBtn = $<HTMLButtonElement>('toggle-hat');
+const bgBtn = $<HTMLButtonElement>('toggle-bg');
 const paletteBtn = $<HTMLButtonElement>('next-palette');
 const wandBtn = $<HTMLButtonElement>('calibrate-wand');
 const wandStatusEl = $('wand-status');
@@ -43,6 +45,9 @@ const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -10, 10);
 
 const PARTICLE_COUNT = window.innerWidth < 700 ? 7000 : 14000;
 // Drawing order, back to front: camera video (behind the canvas) → hat → particles → hand outline.
+const portrait = new Portrait($<HTMLCanvasElement>('portrait'));
+$('hall-bg').style.backgroundImage = `url("${HALL.image}")`;
+let hallOn = false;
 const hat = new Hat();
 scene.add(hat.mesh);
 const vignette = new Vignette($('mood'));
@@ -73,6 +78,7 @@ function resize() {
   particles.setBounds(aspect, 1);
   particles.setPointSize(3.2 * dpr * Math.max(0.7, h / 900));
   wandTrail.setPixelRatio(dpr);
+  portrait.resize(w, h, dpr);
 }
 window.addEventListener('resize', resize);
 resize();
@@ -94,26 +100,33 @@ let paletteIndex = 0;
 let lastPaletteSwitch = 0;
 
 /**
+ * Where the camera picture is shown, in screen pixels: the whole screen in the Room,
+ * or just the gold frame's opening in the Hall. Every overlay is placed through this,
+ * so the hat, wand, hands and spell paths stay lined up with you.
+ */
+function videoRect(): Rect {
+  return hallOn ? hallOpening(window.innerWidth, window.innerHeight) : { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
+}
+
+/**
  * Converts a MediaPipe point (0..1 across the camera image) to screen pixels.
- * Accounts for the video being cropped to fill the screen and mirrored.
+ * Accounts for the video being cropped to fill its area (screen or frame) and mirrored.
  */
 function toScreen(nx: number, ny: number): Point2 {
-  const W = window.innerWidth;
-  const H = window.innerHeight;
-  const scale = Math.max(W / video.videoWidth, H / video.videoHeight);
+  const r = videoRect();
+  const scale = Math.max(r.w / video.videoWidth, r.h / video.videoHeight);
   const dw = video.videoWidth * scale;
   const dh = video.videoHeight * scale;
-  return { x: W - (nx * dw - (dw - W) / 2), y: ny * dh - (dh - H) / 2 }; // x is mirrored
+  return { x: r.x + r.w - (nx * dw - (dw - r.w) / 2), y: r.y + ny * dh - (dh - r.h) / 2 }; // x is mirrored
 }
 
 /** The reverse of toScreen: screen pixels → camera image coordinates (0..1). */
 function fromScreen(sx: number, sy: number): Point2 {
-  const W = window.innerWidth;
-  const H = window.innerHeight;
-  const scale = Math.max(W / video.videoWidth, H / video.videoHeight);
+  const r = videoRect();
+  const scale = Math.max(r.w / video.videoWidth, r.h / video.videoHeight);
   const dw = video.videoWidth * scale;
   const dh = video.videoHeight * scale;
-  return { x: (W - sx + (dw - W) / 2) / dw, y: (sy + (dh - H) / 2) / dh };
+  return { x: (r.x + r.w - sx + (dw - r.w) / 2) / dw, y: (sy - r.y + (dh - r.h) / 2) / dh };
 }
 
 /** Same as toScreen, but in the 3D scene's coordinates (x: -aspect..aspect, y: -1..1). */
@@ -191,7 +204,7 @@ const spellEffects = new SpellEffects(
   { light: $('lumos-light'), dark: $('nox-dark'), flash: $('spell-flash') },
   () => particles.setPalette(paletteIndex),
 );
-const practice = new Practice($('practice'), $<HTMLCanvasElement>('guide'), castSpell, openSpellbook);
+const practice = new Practice($('practice'), $<HTMLCanvasElement>('guide'), castSpell, openSpellbook, () => (hallOn ? videoRect() : null));
 const spellbook = new Spellbook($('spellbook'), SPELLS, startPractice);
 let wandScene: Point2 | null = null; // wand tip in scene coordinates this frame
 let wandScreen: Point2 | null = null; // and in screen pixels
@@ -316,6 +329,7 @@ function frame() {
     handleResult(handResult, now);
     wand.detect(video, handResult.landmarks, now);
     // Face tracking feeds both the hat and the vignette; it's skipped when neither is on.
+    if (hallOn) portrait.render(video, now, videoRect());
     if (faceLandmarker && (hat.enabled || vignette.enabled)) {
       const face = faceLandmarker.detectForVideo(video, now).faceLandmarks[0];
       if (face) {
@@ -447,11 +461,49 @@ hatBtn.addEventListener('click', () => {
 });
 
 // Dim: On = "dark magic" vignette + cool tint. Dim: Off = fully clear camera.
-dimBtn.addEventListener('click', () => {
-  vignette.enabled = document.body.classList.toggle('dim');
-  dimBtn.textContent = vignette.enabled ? 'Dim: On' : 'Dim: Off';
-  dimBtn.setAttribute('aria-pressed', String(vignette.enabled));
+function setDim(on: boolean) {
+  vignette.enabled = on;
+  document.body.classList.toggle('dim', on);
+  dimBtn.textContent = on ? 'Dim: On' : 'Dim: Off';
+  dimBtn.setAttribute('aria-pressed', String(on));
+}
+dimBtn.addEventListener('click', () => setDim(!vignette.enabled));
+
+// ---------- Background: Room (your camera) / Hall (Magic Portrait) ----------
+let dimBeforeHall = true;
+bgBtn.addEventListener('click', async () => {
+  if (!hallOn && !portrait.ready) {
+    // The segmentation model loads the first time the Hall is chosen.
+    bgBtn.disabled = true;
+    bgBtn.textContent = 'Background: loading…';
+    try {
+      portrait.setSegmenter(await createSelfieSegmenter());
+    } catch (err) {
+      console.error('Selfie segmentation failed to load', err);
+      bgBtn.textContent = 'Hall unavailable';
+      return;
+    }
+    bgBtn.disabled = false;
+  }
+  setHall(!hallOn);
 });
+
+function setHall(on: boolean) {
+  hallOn = on;
+  document.body.classList.toggle('hall', on);
+  bgBtn.textContent = on ? 'Background: Hall' : 'Background: Room';
+  bgBtn.setAttribute('aria-pressed', String(on));
+  // The vignette stays off in the Hall; the Room gets back whatever it had before.
+  if (on) {
+    dimBeforeHall = vignette.enabled;
+    setDim(false);
+  } else {
+    setDim(dimBeforeHall);
+    portrait.clear();
+  }
+  dimBtn.disabled = on;
+  practice.layout(); // the spell symbol moves into (or out of) the frame
+}
 paletteBtn.addEventListener('click', nextPalette);
 
 // ---------- Wand calibration ----------
