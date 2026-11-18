@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hand Particles</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body class="dim">
+    <!-- Your webcam feed (mirrored, behind the particles) -->
+    <video id="webcam" playsinline muted></video>
+
+    <!-- "Dark magic" mood: cool tint + vignette that follows your face -->
+    <div id="mood">
+      <div id="tint"></div>
+      <div id="vignette"></div>
+    </div>
+
+    <!-- Three.js puts its <canvas> in here -->
+    <div id="stage"></div>
+
+    <!-- Start screen -->
+    <section id="intro" class="panel">
+      <h1>Hand Particles</h1>
+      <p>Move your hands in front of the camera and the particles will react. Try different gestures to change what they do.</p>
+      <button id="start" type="button">Start camera</button>
+      <p class="fine">Hand tracking runs on your own computer. Your video is never uploaded.</p>
+      <p id="error" role="alert"></p>
+    </section>
+
+    <!-- On-screen guide, shown after the camera starts -->
+    <aside id="hud" hidden>
+      <div id="status">Loading hand tracking…</div>
+      <ul id="legend">
+        <li data-gesture="relaxed"><span>👆</span> Any hand: particles follow your index finger</li>
+        <li data-gesture="point"><span>☝️</span> Point: a bigger swarm follows your fingertip</li>
+        <li data-gesture="open"><span>🖐️</span> Open palm: make it rain</li>
+        <li data-gesture="fist"><span>✊</span> Fist: scatter everything outward</li>
+        <li data-gesture="pinch"><span>🤏</span> Pinch: fireworks burst and sparkle</li>
+        <li data-gesture="peace"><span>✌️</span> Peace sign: switch color theme</li>
+      </ul>
+      <div class="controls">
+        <button id="toggle-dim" type="button" aria-pressed="true">Dim: On</button>
+        <button id="toggle-hat" type="button" aria-pressed="true">Hat: On</button>
+        <button id="next-palette" type="button">Colors: Blue</button>
+      </div>
+    </aside>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
