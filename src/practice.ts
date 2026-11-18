@@ -1,164 +1,329 @@
 import type { Point2 } from './gestures';
-import { spellSvg } from './spellbook';
-import { makeTemplate, matchScore, pathLength, type Pt } from './spellPath';
+import { resample, smoothPath, pathLength } from './spellPath';
 import type { Spell } from './spells.js';
 
-/** A stroke scoring at least this (0..1) casts the spell. */
-export const CAST_THRESHOLD = 0.72;
-/** Straight-line spells (Lumos, Nox) are easy to match by accident, so they need more. */
-const LINE_THRESHOLD = 0.9;
-const MAX_STROKE_MS = 4000; // only the last few seconds of wand movement are considered
-const MIN_STROKE_MS = 250;
-const MIN_SIZE = 0.15; // the shape must be at least this big (fraction of the screen's short side)
-const LINE_MIN_SIZE = 0.25;
-const CHECK_EVERY_MS = 90;
-const COOLDOWN_MS = 1200; // pause after a cast so one motion doesn't cast twice
-const LOST_BREAK_MS = 250; // if the wand is lost this long, the stroke starts over
+/** The guide symbol's size, as a fraction of the screen height. */
+const GUIDE_SIZE = 0.6;
+/** How far the wand tip may stray from the path, as a fraction of the screen width. */
+const CORRIDOR = 0.08;
+/** Leaving the path for longer than this resets the attempt. */
+const OFF_PATH_MS = 500;
+/** How long the progress takes to drain away after a failed attempt. */
+const FAIL_FADE_MS = 700;
+/** After a success, return to the Spellbook after this long. */
+const SUCCESS_HOLD_MS = 2500;
+/** Progress may jump at most this far ahead along the path in one step (× corridor width). */
+const LOOKAHEAD = 2.5;
+const GUIDE_SPACING = 4; // px between points of the dense guide path
+/** Reaching this close to the end of the path (× corridor width) completes it. */
+const END_SLACK = 0.33;
 
-export interface CastInfo {
-  score: number;
-  dir: Point2; // direction at the end of the stroke, screen pixels (y down), unit length
+type State = 'waiting' | 'tracing' | 'failed' | 'success';
+
+export interface SuccessInfo {
+  tip: Point2; // where the spell ended (screen pixels)
+  dir: Point2; // direction of the path's final stretch (screen pixels, y down, unit length)
 }
 
 /**
- * Practice mode: shows one spell's motion and watches the wand.
- * When the recent wand movement matches the spell's shape, it casts.
+ * Practice mode. The spell's motion is drawn large in the middle of the screen.
+ * Touch the start dot with the wand tip, then follow the line: the traced part fills in gold.
+ * Stray outside the corridor for more than half a second and it resets.
  */
 export class Practice {
   spell: Spell | null = null;
-  private template: Pt[] = [];
-  private isLine = false;
-  private history: { x: number; y: number; t: number }[] = [];
-  private lastSeen = -Infinity;
-  private lastFeed = 0;
-  private lastCheck = 0;
-  private cooldownUntil = 0;
-  private shownScore = 0;
-  private casts = 0;
+  private state: State = 'waiting';
+  private guide: Point2[] = []; // dense path in screen pixels
+  private dist: number[] = []; // distance along the path to each guide point
+  private tol = 60; // corridor half-width in px
+  private index = 0; // how far along the guide the wand has reached
+  private shown = 0; // displayed progress 0..1 (eases toward the real progress)
+  private offSince = 0;
+  private stateSince = 0;
+  private failedFrom = 0;
+  private lastStatus = '';
 
+  private readonly ctx: CanvasRenderingContext2D;
   private readonly nameEl: HTMLElement;
-  private readonly kindEl: HTMLElement;
   private readonly descEl: HTMLElement;
-  private readonly artEl: HTMLElement;
   private readonly meterFill: HTMLElement;
   private readonly meterLabel: HTMLElement;
-  private readonly countEl: HTMLElement;
+  private readonly statusEl: HTMLElement;
 
   constructor(
     private readonly root: HTMLElement,
-    private readonly onCast: (spell: Spell, info: CastInfo) => void,
+    private readonly canvas: HTMLCanvasElement,
+    private readonly onSuccess: (spell: Spell, info: SuccessInfo) => void,
+    private readonly onDone: () => void,
   ) {
+    this.ctx = canvas.getContext('2d')!;
     const q = (sel: string) => root.querySelector<HTMLElement>(sel)!;
     this.nameEl = q('.practice-name');
-    this.kindEl = q('.practice-kind');
     this.descEl = q('.practice-desc');
-    this.artEl = q('.practice-art');
     this.meterFill = q('.meter-fill');
     this.meterLabel = q('.meter-label');
-    this.countEl = q('.practice-count');
+    this.statusEl = q('.practice-status');
+    window.addEventListener('resize', () => this.layout());
+  }
+
+  get active() {
+    return this.spell !== null;
   }
 
   start(spell: Spell) {
     this.spell = spell;
-    this.template = makeTemplate(spell.path);
-    const xs = spell.path.map((p) => p[0]);
-    const ys = spell.path.map((p) => p[1]);
-    const w = Math.max(...xs) - Math.min(...xs);
-    const h = Math.max(...ys) - Math.min(...ys);
-    this.isLine = Math.min(w, h) < 0.25 * Math.max(w, h);
-    this.history = [];
-    this.casts = 0;
-    this.shownScore = 0;
     this.nameEl.textContent = spell.name;
-    this.kindEl.textContent = spell.kind;
     this.descEl.textContent = spell.description;
-    this.artEl.innerHTML = spellSvg(spell, 140, 16, true);
-    this.countEl.textContent = 'Trace the shape with your wand, starting at the dot.';
     this.root.hidden = false;
-    this.renderMeter(0);
+    this.canvas.hidden = false;
+    this.layout();
+    this.setState('waiting', performance.now());
   }
 
   stop() {
     this.spell = null;
-    this.history = [];
     this.root.hidden = true;
+    this.canvas.hidden = true;
   }
 
   /** Call every frame with the wand tip in screen pixels (null when lost). */
-  feed(p: Point2 | null, now: number) {
+  update(p: Point2 | null, now: number, time: number) {
     if (!this.spell) return;
-    if (p) {
-      if (now - this.lastSeen > LOST_BREAK_MS) this.history = [];
-      this.history.push({ x: p.x, y: p.y, t: now });
-      this.lastSeen = now;
-    }
-    while (this.history.length && now - this.history[0].t > MAX_STROKE_MS) this.history.shift();
+    const n = this.guide.length;
+    const progress = () => (n > 1 ? this.dist[this.index] / this.dist[n - 1] : 0);
 
-    // Let the meter sink slowly so it's readable.
-    const dt = Math.min(0.1, (now - (this.lastFeed || now)) / 1000);
-    this.lastFeed = now;
-    this.shownScore = Math.max(0, this.shownScore - 0.6 * dt);
-    if (now - this.lastCheck >= CHECK_EVERY_MS && now >= this.cooldownUntil) {
-      this.lastCheck = now;
-      const best = this.bestMatch(now);
-      if (best && best.score > this.shownScore) this.shownScore = best.score;
-      const threshold = this.isLine ? LINE_THRESHOLD : CAST_THRESHOLD;
-      if (best && best.score >= threshold) {
-        this.casts++;
-        this.countEl.textContent = `Cast ${this.casts} time${this.casts === 1 ? '' : 's'}. Again!`;
-        this.history = [];
-        this.cooldownUntil = now + COOLDOWN_MS;
-        this.onCast(this.spell, { score: best.score, dir: best.dir });
+    switch (this.state) {
+      case 'waiting': {
+        const start = this.guide[0];
+        if (p && Math.hypot(p.x - start.x, p.y - start.y) <= this.tol) {
+          this.index = 0;
+          this.offSince = 0;
+          this.setState('tracing', now);
+        }
+        this.shown = 0;
+        break;
       }
+      case 'tracing': {
+        const hit = p ? this.follow(p) : false;
+        if (hit) this.offSince = 0;
+        else if (!this.offSince) this.offSince = now;
+        else if (now - this.offSince > OFF_PATH_MS) {
+          this.failedFrom = this.shown;
+          this.setState('failed', now);
+          break;
+        }
+        // Done when the wand reaches the end of the path (close enough: hands wobble).
+        if (this.dist[n - 1] - this.dist[this.index] <= this.tol * END_SLACK) {
+          this.index = n - 1;
+          this.shown = 1;
+          this.setState('success', now);
+          this.onSuccess(this.spell, { tip: this.guide[n - 1], dir: this.endDirection() });
+          break;
+        }
+        this.shown += (progress() - this.shown) * 0.5;
+        break;
+      }
+      case 'failed': {
+        // Drain the gold back out, then wait at the start dot again.
+        const k = Math.min(1, (now - this.stateSince) / FAIL_FADE_MS);
+        this.shown = this.failedFrom * (1 - k);
+        if (k >= 1 && now - this.stateSince > 1200) {
+          this.index = 0;
+          this.setState('waiting', now);
+        }
+        break;
+      }
+      case 'success':
+        this.shown = 1;
+        if (now - this.stateSince > SUCCESS_HOLD_MS) {
+          const done = this.onDone;
+          this.stop();
+          done();
+          return;
+        }
+        break;
     }
-    this.renderMeter(this.shownScore);
+
+    const pct = Math.round(this.shown * 100);
+    this.meterFill.style.width = `${pct}%`;
+    this.meterLabel.textContent = `Match ${pct}%`;
+    this.draw(now, time);
   }
 
   /**
-   * Tries every possible start point in the recent wand history (the end is always "now"),
-   * so it doesn't matter what the wand did before the spell began.
+   * Moves progress forward to the nearest guide point just ahead of the wand.
+   * Only a short stretch ahead is searched, so the path must be followed in order
+   * (cutting across a loop doesn't count). Returns whether the wand is in the corridor.
    */
-  private bestMatch(now: number): CastInfo | null {
-    const h = this.history;
-    const n = h.length;
-    if (n < 6) return null;
-    const minSize = (this.isLine ? LINE_MIN_SIZE : MIN_SIZE) * Math.min(window.innerWidth, window.innerHeight);
-    let best: CastInfo | null = null;
-    for (let i = 0; i < n - 5; i += 2) {
-      if (now - h[i].t < MIN_STROKE_MS) break;
-      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-      for (let k = i; k < n; k++) {
-        x0 = Math.min(x0, h[k].x);
-        y0 = Math.min(y0, h[k].y);
-        x1 = Math.max(x1, h[k].x);
-        y1 = Math.max(y1, h[k].y);
+  private follow(p: Point2): boolean {
+    const g = this.guide;
+    const d = this.dist;
+    const ahead = d[this.index] + this.tol * LOOKAHEAD;
+    const behind = d[this.index] - this.tol;
+    let best = -1;
+    let bestD = Infinity;
+    let inCorridor = false;
+    // Look back a little too, so wobbling just behind the progress still counts as on the path.
+    let i = this.index;
+    while (i > 0 && d[i - 1] >= behind) i--;
+    for (; i < g.length && d[i] <= ahead; i++) {
+      const dd = Math.hypot(p.x - g[i].x, p.y - g[i].y);
+      if (dd <= this.tol) inCorridor = true;
+      if (i >= this.index && dd < bestD) {
+        bestD = dd;
+        best = i;
       }
-      if (Math.max(x1 - x0, y1 - y0) < minSize) continue;
-      if (pathLength(h, i, n) < minSize) continue;
-      const score = matchScore(this.template, h, i, n);
-      if (!best || score > best.score) best = { score, dir: endDirection(h, i, n) };
     }
-    return best;
+    if (best > this.index && bestD <= this.tol) this.index = best;
+    return inCorridor;
   }
 
-  private renderMeter(score: number) {
-    const pct = Math.round(score * 100);
-    this.meterFill.style.width = `${pct}%`;
-    this.meterLabel.textContent = `Match ${pct}%`;
+  private setState(state: State, now: number) {
+    this.state = state;
+    this.stateSince = now;
+    const text: Record<State, string> = {
+      waiting: 'Touch the glowing dot to begin',
+      tracing: 'Follow the line…',
+      failed: 'Try again',
+      success: 'Success!',
+    };
+    if (text[state] !== this.lastStatus) {
+      this.statusEl.textContent = this.lastStatus = text[state];
+      this.statusEl.dataset.state = state;
+    }
   }
-}
 
-/** Direction of the last stretch of a stroke (about its final 15%). */
-function endDirection(h: readonly Pt[], from: number, to: number): Point2 {
-  const total = pathLength(h, from, to);
-  let acc = 0;
-  let k = to - 1;
-  while (k > from && acc < total * 0.15) {
-    acc += Math.hypot(h[k].x - h[k - 1].x, h[k].y - h[k - 1].y);
-    k--;
+  /** Places the spell's path large in the middle of the screen. */
+  private layout() {
+    if (!this.spell) return;
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const dpr = Math.min(window.devicePixelRatio, 2);
+    this.canvas.width = Math.round(W * dpr);
+    this.canvas.height = Math.round(H * dpr);
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const size = Math.min(H * GUIDE_SIZE, W * 0.85);
+    const cx = W / 2;
+    const cy = H * 0.56; // a little low, leaving room for the card at the top
+    const curve = smoothPath(this.spell.path, 16).map((q) => ({ x: cx + (q.x - 0.5) * size, y: cy + (q.y - 0.5) * size }));
+    const count = Math.max(2, Math.ceil(pathLength(curve) / GUIDE_SPACING));
+    this.guide = resample(curve, count);
+    this.dist = [0];
+    for (let i = 1; i < this.guide.length; i++) {
+      this.dist.push(this.dist[i - 1] + Math.hypot(this.guide[i].x - this.guide[i - 1].x, this.guide[i].y - this.guide[i - 1].y));
+    }
+    this.tol = Math.max(36, W * CORRIDOR);
+    this.index = Math.min(this.index, this.guide.length - 1);
   }
-  const dx = h[to - 1].x - h[k].x;
-  const dy = h[to - 1].y - h[k].y;
-  const len = Math.hypot(dx, dy) || 1;
-  return { x: dx / len, y: dy / len };
+
+  private endDirection(): Point2 {
+    const g = this.guide;
+    const a = g[Math.max(0, g.length - 1 - Math.ceil(this.tol / GUIDE_SPACING))];
+    const b = g[g.length - 1];
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    return { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
+  }
+
+  // ---------- Drawing ----------
+
+  private draw(now: number, time: number) {
+    const ctx = this.ctx;
+    const g = this.guide;
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    ctx.clearRect(0, 0, W, H);
+    if (g.length < 2) return;
+
+    // After a success the whole symbol glows gold, then fades away.
+    const successAge = this.state === 'success' ? (now - this.stateSince) / SUCCESS_HOLD_MS : 0;
+    ctx.globalAlpha = this.state === 'success' ? Math.max(0, 1 - Math.max(0, successAge - 0.4) / 0.6) : 1;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // The corridor: a very faint band showing how close you need to stay.
+    this.stroke(g.length, 'rgba(255, 255, 255, 0.035)', this.tol * 2, 0, '');
+
+    // The guide line: a soft glowing white line.
+    this.stroke(g.length, 'rgba(255, 255, 255, 0.35)', 10, 22, 'rgba(255, 255, 255, 0.9)');
+    this.stroke(g.length, 'rgba(255, 255, 255, 0.85)', 3, 8, 'rgba(255, 255, 255, 0.9)');
+
+    // The traced part, filled in glowing gold.
+    const upto = this.pointsFor(this.shown);
+    if (upto > 1) {
+      this.stroke(upto, 'rgba(255, 196, 61, 0.9)', 12, 26, 'rgba(255, 190, 50, 1)');
+      this.stroke(upto, 'rgba(255, 246, 214, 1)', 4, 10, 'rgba(255, 220, 120, 1)');
+    }
+
+    const gold = this.state === 'success';
+    this.arrow(gold);
+
+    // The start dot pulses; while waiting, a ring ripples out from it to invite a touch.
+    const s = g[0];
+    const pulse = 1 + 0.22 * Math.sin(time * 5);
+    if (this.state === 'waiting') {
+      const k = (time * 0.9) % 1;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, 12 + k * this.tol, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.6 * (1 - k)})`;
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 0;
+      ctx.stroke();
+    }
+    this.dot(s, 11 * pulse, this.state === 'waiting' ? '#ffffff' : '#ffd66b');
+
+    // A bright head at the current progress point.
+    if (upto > 1 && this.state !== 'success') this.dot(g[upto - 1], 7, '#fff3c4');
+    ctx.globalAlpha = 1;
+  }
+
+  /** How many guide points make up `fraction` of the path. */
+  private pointsFor(fraction: number): number {
+    if (fraction <= 0) return 0;
+    const target = fraction * this.dist[this.dist.length - 1];
+    let i = 0;
+    while (i < this.dist.length - 1 && this.dist[i] < target) i++;
+    return i + 1;
+  }
+
+  private stroke(count: number, color: string, width: number, blur: number, glow: string) {
+    const ctx = this.ctx;
+    const g = this.guide;
+    ctx.beginPath();
+    ctx.moveTo(g[0].x, g[0].y);
+    for (let i = 1; i < count; i++) ctx.lineTo(g[i].x, g[i].y);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.shadowBlur = blur;
+    ctx.shadowColor = glow || 'transparent';
+    ctx.stroke();
+  }
+
+  private dot(p: Point2, r: number, color: string) {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 24;
+    ctx.shadowColor = color;
+    ctx.fill();
+  }
+
+  private arrow(gold: boolean) {
+    const ctx = this.ctx;
+    const end = this.guide[this.guide.length - 1];
+    const d = this.endDirection();
+    const a = Math.atan2(d.y, d.x);
+    const h = 26;
+    const pt = (da: number, r: number) => [end.x + Math.cos(a + da) * r, end.y + Math.sin(a + da) * r] as const;
+    ctx.beginPath();
+    ctx.moveTo(...pt(0, h * 0.45));
+    ctx.lineTo(...pt(2.55, h));
+    ctx.lineTo(...pt(-2.55, h));
+    ctx.closePath();
+    ctx.fillStyle = gold ? '#ffd66b' : 'rgba(255, 255, 255, 0.9)';
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = gold ? '#ffbe32' : 'rgba(255, 255, 255, 0.9)';
+    ctx.fill();
+  }
 }

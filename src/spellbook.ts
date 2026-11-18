@@ -41,7 +41,6 @@ export class Spellbook {
 
   constructor(
     private readonly root: HTMLElement,
-    private readonly cursor: HTMLElement,
     spells: readonly Spell[],
     private readonly onChoose: (spell: Spell) => void,
   ) {
@@ -80,19 +79,16 @@ export class Spellbook {
   close() {
     this.isOpen = false;
     this.root.hidden = true;
-    this.cursor.hidden = true;
     this.resetDwell();
   }
 
   /** Call every frame while open, with the wand tip in screen pixels (or null when lost). */
   updateWand(p: Point2 | null, now: number) {
     if (!this.isOpen) return;
-    this.cursor.hidden = !p;
     if (!p) {
       this.resetDwell();
       return;
     }
-    this.cursor.style.transform = `translate(${p.x}px, ${p.y}px)`;
 
     const index = this.rects.findIndex((r) => p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom);
     if (index < 0) {

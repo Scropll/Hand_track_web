@@ -211,7 +211,8 @@ export class SpellEffects {
     this.els.light.classList.toggle('on', !!(this.lumos && ctx.tipScreen));
   }
 
-  private flash(color: string, ms: number) {
+  /** A brief full-screen flash of color. */
+  flash(color: string, ms: number) {
     this.els.flash.style.background = color;
     this.els.flash.animate([{ opacity: 1 }, { opacity: 0 }], { duration: ms, easing: 'ease-out' });
   }

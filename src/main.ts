@@ -10,7 +10,7 @@ import { profileColor, WandTracker } from './wand';
 import { WandTrail } from './wandTrail';
 import { SPELLS, type Spell } from './spells.js';
 import { Spellbook } from './spellbook';
-import { Practice, type CastInfo } from './practice';
+import { Practice, type SuccessInfo } from './practice';
 import { SpellEffects } from './spellEffects';
 
 // ---------- Page elements ----------
@@ -29,6 +29,8 @@ const wandBtn = $<HTMLButtonElement>('calibrate-wand');
 const wandStatusEl = $('wand-status');
 const spellbookBtn = $<HTMLButtonElement>('open-spellbook');
 const castBanner = $('cast-banner');
+const wandCursor = $('wand-cursor');
+const practiceNav = $('practice-nav');
 const legendItems = [...document.querySelectorAll<HTMLLIElement>('#legend li')];
 
 // ---------- Three.js scene ----------
@@ -189,15 +191,35 @@ const spellEffects = new SpellEffects(
   { light: $('lumos-light'), dark: $('nox-dark'), flash: $('spell-flash') },
   () => particles.setPalette(paletteIndex),
 );
-const practice = new Practice($('practice'), castSpell);
-const spellbook = new Spellbook($('spellbook'), $('wand-cursor'), SPELLS, (spell) => practice.start(spell));
+const practice = new Practice($('practice'), $<HTMLCanvasElement>('guide'), castSpell, openSpellbook);
+const spellbook = new Spellbook($('spellbook'), SPELLS, startPractice);
 let wandScene: Point2 | null = null; // wand tip in scene coordinates this frame
 let wandScreen: Point2 | null = null; // and in screen pixels
 
-function castSpell(spell: Spell, info: CastInfo) {
-  // The stroke's direction comes in screen pixels (y down); the scene's y points up.
-  spellEffects.cast(spell, { tip: wandScene, tipScreen: wandScreen, aspect }, { x: info.dir.x, y: -info.dir.y }, performance.now());
-  castBanner.textContent = spell.name;
+/** Practice is calmer: dimmer particles and no gesture panel. They come back afterwards. */
+function setPracticeMode(on: boolean) {
+  hud.hidden = on;
+  practiceNav.hidden = !on;
+  particles.setOpacity(on ? 0.3 : 1);
+}
+
+function startPractice(spell: Spell) {
+  practice.start(spell);
+  setPracticeMode(true);
+}
+
+function stopPractice() {
+  practice.stop();
+  setPracticeMode(false);
+}
+
+function castSpell(spell: Spell, info: SuccessInfo) {
+  particles.setOpacity(1); // full brightness so the spell's effect shows
+  const tip = toSceneFromScreen(info.tip);
+  // The path's direction comes in screen pixels (y down); the scene's y points up.
+  spellEffects.cast(spell, { tip, tipScreen: info.tip, aspect }, { x: info.dir.x, y: -info.dir.y }, performance.now());
+  spellEffects.flash('rgba(255, 205, 80, 0.5)', 900);
+  castBanner.textContent = `✨ ${spell.name.toUpperCase()}!`;
   castBanner.style.setProperty('--spell-color', spell.colors[0]);
   castBanner.classList.remove('show');
   void castBanner.offsetWidth; // restart the animation
@@ -206,12 +228,20 @@ function castSpell(spell: Spell, info: CastInfo) {
 
 function openSpellbook() {
   if (calibrating) setCalibrating(false);
-  practice.stop();
+  stopPractice();
   spellbook.open();
 }
 spellbookBtn.addEventListener('click', openSpellbook);
 $('back-to-spellbook').addEventListener('click', openSpellbook);
-$('exit-practice').addEventListener('click', () => practice.stop());
+$('exit-practice').addEventListener('click', stopPractice);
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && practice.active) stopPractice();
+});
+
+/** Screen pixels → scene coordinates. */
+function toSceneFromScreen(p: Point2): Point2 {
+  return { x: (p.x / window.innerWidth) * 2 * aspect - aspect, y: 1 - (p.y / window.innerHeight) * 2 };
+}
 
 function nextPalette() {
   paletteIndex = (paletteIndex + 1) % PALETTES.length;
@@ -306,8 +336,14 @@ function frame() {
   wandScene = wand.pos && toWorld(wand.pos.x, wand.pos.y);
   wandScreen = wand.pos && toScreen(wand.pos.x, wand.pos.y);
   wandTrail.update(wandScene, now, time);
+  // A small glowing cursor shows exactly what is being tracked as the wand tip.
+  wandCursor.hidden = !wandScreen;
+  if (wandScreen) {
+    wandCursor.style.transform = `translate(${wandScreen.x}px, ${wandScreen.y}px)`;
+    wandCursor.dataset.source = wand.source;
+  }
   if (spellbook.isOpen) spellbook.updateWand(wandScreen, now);
-  else practice.feed(wandScreen, now);
+  else practice.update(wandScreen, now, time);
 
   const { forces, rain } = buildForces();
   if (hands.size === 0 && now - mouse.last < 1500) {
@@ -360,7 +396,7 @@ function updateHud() {
     : wand.source === 'color'
       ? 'Wand: tracked'
       : wand.source === 'hand'
-        ? 'Wand: tracked (estimated from hand)'
+        ? 'Wand: tracked (index fingertip)'
         : 'Wand: lost';
   if (wandText !== lastWandText) {
     wandStatusEl.textContent = lastWandText = wandText;
@@ -440,7 +476,7 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && calibrating) setCalibrating(false);
 });
 window.addEventListener('pointerdown', (e) => {
-  if (!calibrating || (e.target as Element).closest('#hud, #practice, #spellbook')) return;
+  if (!calibrating || (e.target as Element).closest('#hud, #practice, #practice-nav, #spellbook')) return;
   e.preventDefault();
   const p = fromScreen(e.clientX, e.clientY);
   const problem = wand.calibrate(video, p.x, p.y);
