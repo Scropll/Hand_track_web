@@ -1,0 +1,9 @@
+// Cloudflare Workers config: publishes the built site (the dist/ folder) as static files.
+// Cloudflare runs `npm run build`, then `npx wrangler deploy`, on every push to main.
+{
+  "name": "hand-track-web",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist"
+  }
+}

@@ -85,6 +85,21 @@ Each spell has its own effect on the particles: Lumos lights the wand tip, Nox d
 - Gesture strengths and sizes: `buildForces()` in `src/main.ts`
 - Color themes: `PALETTES` in `src/particles.ts`
 
+## Publishing it (Cloudflare Workers, free)
+
+The site is published by Cloudflare as the Worker **hand-track-web**, connected to this GitHub repo. Every time a pull request is merged into `main`, Cloudflare rebuilds and republishes it automatically, usually in 1–3 minutes. The live address is shown on the Worker's **Overview** page (it looks like `https://hand-track-web.<your-name>.workers.dev`).
+
+How it's set up (already done; only needed again for a new project):
+1. [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages → Create** → import the **Hand_track_web** GitHub repository.
+2. Build command: `npm run build`. Deploy command: `npx wrangler deploy`. Root directory: `/`.
+3. `wrangler.jsonc` tells Cloudflare to publish the built `dist/` folder as static files under the name `hand-track-web`.
+
+Notes:
+- Camera access needs https, and `*.workers.dev` is https, so the camera works there.
+- `public/_headers` lets browsers keep the large tracking models for a day.
+- `.node-version` asks for Node.js 22 when building.
+- Build logs are under the Worker's **Deployments** tab if something goes wrong.
+
 ## Sharing it
 
 `npm run build` creates a `dist/` folder you can upload to any static host (Netlify, Vercel, GitHub Pages). Browsers only allow camera access over **https** or on localhost.
