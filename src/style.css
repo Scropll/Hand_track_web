@@ -425,3 +425,21 @@ body.calibrating, body.calibrating #stage canvas { cursor: crosshair; }
   .spell-trace { animation: none; stroke-dasharray: none; }
   #cast-banner.show { animation-duration: 0.01s; }
 }
+
+/* ================= Magic Portrait (Background: Hall) ================= */
+#hall-bg, #portrait {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  display: none;
+}
+#hall-bg {
+  background-size: cover; /* must match hallOpening() in src/portrait.ts */
+  background-position: center;
+  background-repeat: no-repeat;
+}
+body.hall #hall-bg, body.hall #portrait { display: block; }
+body.hall #webcam { opacity: 0; } /* you're drawn inside the frame instead */
+body.hall #mood { display: none; }

@@ -1,4 +1,4 @@
-import { FaceLandmarker, FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
+import { FaceLandmarker, FilesetResolver, HandLandmarker, ImageSegmenter } from '@mediapipe/tasks-vision';
 
 // Files in /public are served from the site root, so these load from your own dev server.
 const BASE = import.meta.env.BASE_URL;
@@ -42,6 +42,19 @@ export async function createFaceLandmarker(): Promise<FaceLandmarker> {
       baseOptions: { modelAssetPath: `${MODELS}/face_landmarker.task`, delegate },
       runningMode: 'VIDEO',
       numFaces: 1,
+    }),
+  );
+}
+
+/** Selfie segmentation: how likely each pixel is to be you (used to cut you out for the Hall). */
+export async function createSelfieSegmenter(): Promise<ImageSegmenter> {
+  const fileset = await getFileset();
+  return withGpuFallback('selfie segmentation', (delegate) =>
+    ImageSegmenter.createFromOptions(fileset, {
+      baseOptions: { modelAssetPath: `${MODELS}/selfie_segmenter.tflite`, delegate },
+      runningMode: 'VIDEO',
+      outputConfidenceMasks: true,
+      outputCategoryMask: false,
     }),
   );
 }

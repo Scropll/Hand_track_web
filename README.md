@@ -24,6 +24,15 @@ Click **Start camera** and allow camera access. Before that, moving the mouse al
 
 With **Dim: On**, a cool teal tint and a dark vignette surround you. The area around your face stays clear and the edges fade to near-black. The vignette follows your face using Face Landmarker. **Dim: Off** shows the plain, fully clear camera. The colors and fade are in `src/style.css` (`#tint`, `#vignette`), and the size of the clear area is set by `INNER` / `OUTER` in `src/vignette.ts`.
 
+## Magic Portrait (Background: Hall)
+
+Click **Background: Room** to switch to **Background: Hall**. The hall picture (`public/assets/hall-bg.jpg`) fills the screen, and MediaPipe selfie segmentation cuts you out of your room with soft edges. You're drawn only inside the gold frame's opening, with a warm candlelight tint. The hat, wand cursor, trail, hand outline, spell guide and particles are all placed in the frame's space, so they stay lined up with you. The vignette is off in the Hall and comes back when you switch to the Room. The segmentation model loads the first time you choose the Hall.
+
+Fine-tune it in the `HALL` config at the top of `src/portrait.ts`:
+- `opening`: the inside of the frame as fractions of the picture (now x 20.7%–79.4%, y 20.3%–80%, measured from the frame's inner edge),
+- `feather`: how soft your edge is; `cutoff` / `solid`: how strict the cut-out is,
+- `videoFilter` and `glow`: the candlelight look.
+
 ## Wizard hat
 
 MediaPipe **Face Landmarker** puts a wizard hat on your head. The visible hat is 1.3× your face width, measured between face points 234 and 454. Its bottom edge sits just above your forehead (point 10). It keeps the image's original proportions, tilts with your head, and is smoothed so it doesn't shake. Use the **Hat: On/Off** button to toggle it. The image is `public/costume/harry_potter_hat.webp`, and the fitting settings are at the top of `src/hat.ts`.
@@ -66,6 +75,7 @@ Each spell has its own effect on the particles: Lumos lights the wand tip, Nox d
 - `src/spellbook.ts` – the Spellbook menu (click or wand-hover to choose)
 - `src/practice.ts` – practice mode: the big guide symbol and following it with the wand
 - `src/spellEffects.ts` – what each spell does to the particles and screen
+- `src/portrait.ts` – Magic Portrait: Hall background, selfie cut-out inside the gold frame (config at the top)
 - `src/main.ts` – connects everything, runs once per frame
 - `public/` – the MediaPipe engine (`wasm/`) and hand model, served locally
 
