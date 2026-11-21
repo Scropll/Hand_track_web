@@ -45,6 +45,7 @@
 
     <!-- On-screen guide, shown after the camera starts -->
     <aside id="hud" hidden>
+      <button id="hud-minimize" type="button" aria-label="Hide panel" title="Hide panel">−</button>
       <div id="status">Loading hand tracking…</div>
       <div id="wand-status" data-state="none">Wand: lost</div>
       <ul id="legend">
@@ -64,6 +65,10 @@
         <button id="calibrate-wand" type="button" aria-pressed="false">Calibrate wand</button>
       </div>
     </aside>
+    <!-- Shown instead of the panel when it's hidden; the dot shows the wand status -->
+    <button id="hud-open" type="button" data-state="none" hidden aria-label="Show panel" title="Show panel">
+      <span class="dot" aria-hidden="true"></span>Menu
+    </button>
 
     <!-- Practice mode: one spell to trace with the wand -->
     <section id="practice" class="glass" hidden>

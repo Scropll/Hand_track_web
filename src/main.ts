@@ -22,6 +22,8 @@ const intro = $('intro');
 const startBtn = $<HTMLButtonElement>('start');
 const errorEl = $('error');
 const hud = $('hud');
+const hudMinimizeBtn = $<HTMLButtonElement>('hud-minimize');
+const hudOpenBtn = $<HTMLButtonElement>('hud-open');
 const statusEl = $('status');
 const dimBtn = $<HTMLButtonElement>('toggle-dim');
 const hatBtn = $<HTMLButtonElement>('toggle-hat');
@@ -211,7 +213,8 @@ let wandScreen: Point2 | null = null; // and in screen pixels
 
 /** Practice is calmer: dimmer particles and no gesture panel. They come back afterwards. */
 function setPracticeMode(on: boolean) {
-  hud.hidden = on;
+  practicing = on;
+  syncHud();
   practiceNav.hidden = !on;
   particles.setOpacity(on ? 0.3 : 1);
 }
@@ -415,6 +418,8 @@ function updateHud() {
   if (wandText !== lastWandText) {
     wandStatusEl.textContent = lastWandText = wandText;
     wandStatusEl.dataset.state = calibrating ? 'calibrating' : wand.source;
+    hudOpenBtn.dataset.state = wandStatusEl.dataset.state;
+    hudOpenBtn.title = `Show panel (${wandText})`;
   }
 }
 let lastWandText = '';
@@ -430,7 +435,8 @@ startBtn.addEventListener('click', async () => {
     landmarker = lm;
     intro.hidden = true;
     intro.style.display = 'none';
-    hud.hidden = false;
+    hudReady = true;
+    syncHud();
     loadFaceTracking();
   } catch (err) {
     console.error(err);
@@ -528,7 +534,7 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && calibrating) setCalibrating(false);
 });
 window.addEventListener('pointerdown', (e) => {
-  if (!calibrating || (e.target as Element).closest('#hud, #practice, #practice-nav, #spellbook')) return;
+  if (!calibrating || (e.target as Element).closest('#hud, #hud-open, #practice, #practice-nav, #spellbook')) return;
   e.preventDefault();
   const p = fromScreen(e.clientX, e.clientY);
   const problem = wand.calibrate(video, p.x, p.y);
@@ -539,3 +545,34 @@ window.addEventListener('pointerdown', (e) => {
   setCalibrating(false);
   showWandColor();
 });
+
+// ---------- Hiding the bottom-left panel ----------
+// "−" hides the panel; the small "Menu" button that replaces it brings it back.
+// The choice is remembered in this browser.
+const HUD_COLLAPSED_KEY = 'hud-collapsed';
+let hudReady = false; // the panel appears once the camera has started
+let practicing = false; // practice mode hides the panel entirely
+let hudCollapsed = false;
+try {
+  hudCollapsed = localStorage.getItem(HUD_COLLAPSED_KEY) === '1';
+} catch {
+  /* storage blocked: start with the panel open */
+}
+
+function syncHud() {
+  hud.hidden = !hudReady || practicing || hudCollapsed;
+  hudOpenBtn.hidden = !hudReady || practicing || !hudCollapsed;
+}
+
+function setHudCollapsed(collapsed: boolean) {
+  hudCollapsed = collapsed;
+  try {
+    localStorage.setItem(HUD_COLLAPSED_KEY, collapsed ? '1' : '0');
+  } catch {
+    /* storage blocked: it still works for this visit */
+  }
+  syncHud();
+  (collapsed ? hudOpenBtn : hudMinimizeBtn).focus();
+}
+hudMinimizeBtn.addEventListener('click', () => setHudCollapsed(true));
+hudOpenBtn.addEventListener('click', () => setHudCollapsed(false));
