@@ -121,6 +121,46 @@ button:disabled { opacity: 0.5; cursor: progress; }
   font-size: 0.85rem;
 }
 #hud[hidden] { display: none; }
+#status { padding-right: 34px; } /* room for the − button */
+
+/* The "−" button in the panel's corner, and the "Menu" button that replaces the hidden panel. */
+#hud-minimize {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+#hud-open {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+#hud-open[hidden] { display: none; }
+#hud-open .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff5c6c; /* wand lost */
+}
+#hud-open[data-state="color"] .dot { background: #ffc12e; box-shadow: 0 0 8px #ffc12e; }
+#hud-open[data-state="hand"] .dot { background: #c9a548; }
+#hud-open[data-state="calibrating"] .dot { background: var(--accent); }
 #status { color: var(--accent); margin-bottom: 8px; font-weight: 600; }
 #wand-status {
   margin: -4px 0 8px;
@@ -171,6 +211,7 @@ body.calibrating, body.calibrating #stage canvas { cursor: crosshair; }
 
 @media (max-width: 600px) {
   #hud { font-size: 0.75rem; padding: 10px 12px; }
+  #hud-open { left: 8px; bottom: 8px; }
 }
 
 /* ================= Spells ================= */

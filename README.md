@@ -11,6 +11,8 @@ npm run dev     # then open http://localhost:5173
 
 Click **Start camera** and allow camera access. Before that, moving the mouse also stirs the particles.
 
+The panel in the bottom-left corner can be hidden with its **−** button; a small **Menu** button then brings it back. Its dot shows the wand status, and the browser remembers whether you left the panel open.
+
 | Gesture | Effect |
 |---|---|
 | 👆 Any hand | Particles gently follow your index fingertip |
