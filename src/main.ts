@@ -13,7 +13,6 @@ import { SPELLS, type Spell } from './spells.js';
 import { Spellbook } from './spellbook';
 import { Practice, type SuccessInfo } from './practice';
 import { SpellEffects } from './spellEffects';
-import { ClapDetector } from './clap';
 import { WitchFlights } from './witch';
 import { CircleDetector } from './circleGesture';
 import { CharacterPops } from './popCharacter';
@@ -199,9 +198,12 @@ function onGestureStart(g: Gesture, hand: HandState) {
   if (g === 'fist') {
     particles.scatter(hand.palm.x, hand.palm.y, 1.3);
   } else if (g === 'pinch') {
-    const p = pinchPoint(hand);
-    particles.impulse(p.x, p.y, 0.7, 3.5);
-    particles.emit(p.x, p.y, 500, 0.8, 4);
+    // Pinch: the character pops up between your thumb and finger.
+    const now = performance.now();
+    if (now - lastPinchPop > 700) {
+      lastPinchPop = now;
+      characterPops.launch(sceneToScreen(pinchPoint(hand)));
+    }
   } else if (g === 'peace') {
     const now = performance.now();
     if (now - lastPaletteSwitch > 800) {
@@ -265,8 +267,8 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && practice.active) stopPractice();
 });
 
-// ---------- Clap: the character pops up. Point + 3 circles: the witch flies ----------
-const clapDetector = new ClapDetector();
+// ---------- Pinch: the character pops up. Point + 3 circles: the witch flies ----------
+let lastPinchPop = -Infinity;
 const circleDetectors = new Map<string, CircleDetector>();
 const characterPops = new CharacterPops($('witch-layer'));
 const witches = new WitchFlights($('witch-layer'), (p, dt) => {
@@ -274,11 +276,9 @@ const witches = new WitchFlights($('witch-layer'), (p, dt) => {
   particles.emit(s.x, s.y, Math.ceil(500 * dt), 0.05, 0.35); // sparkles from her broom
 });
 
-function onClap(at: Point2) {
-  const s = toSceneFromScreen(at);
-  particles.impulse(s.x, s.y, 0.6, 1.5);
-  particles.emit(s.x, s.y, 400, 0.4, 1.2); // a puff of sparkles where it pops out
-  characterPops.launch(at);
+/** Scene coordinates → screen pixels. */
+function sceneToScreen(p: Point2): Point2 {
+  return { x: ((p.x + aspect) / (2 * aspect)) * window.innerWidth, y: ((1 - p.y) / 2) * window.innerHeight };
 }
 
 /** Screen pixels → scene coordinates. */
@@ -316,9 +316,6 @@ function buildForces(): { forces: Force[]; rain: RainZone[] } {
         break;
       case 'point': // a strong swarm that follows the index fingertip
         add(h.world[8], 1.6, 2.6, 1.2, 1.2);
-        break;
-      case 'pinch':
-        add(pinchPoint(h), 0.5, 1.4, 3.5, 0.8);
         break;
       case 'peace':
         add(h.world[8], 0.4, 1.6, -1.8, 1.2);
@@ -358,8 +355,6 @@ function frame() {
     const handResult = landmarker.detectForVideo(video, now);
     handleResult(handResult, now);
     wand.detect(video, handResult.landmarks, now);
-    const clap = clapDetector.update(handResult.landmarks, now, video.videoWidth, video.videoHeight);
-    if (clap) onClap(toScreen(clap.x, clap.y));
     // Face tracking feeds both the hat and the vignette; it's skipped when neither is on.
     if (hallOn) portrait.render(video, now, videoRect());
     if (faceLandmarker && (hat.enabled || vignette.enabled)) {
@@ -406,11 +401,7 @@ function frame() {
 
   for (const h of hands.values()) {
     const g = h.stabilizer.current;
-    if (g === 'pinch') {
-      // While pinching, keep sprinkling new sparkles from the pinch point.
-      const p = pinchPoint(h);
-      particles.emit(p.x, p.y, Math.ceil(1200 * dt), 0.2, 1.0);
-    } else if (g === 'open') {
+    if (g === 'open') {
       // While the palm is open, keep dropping fresh raindrops from the top of the screen.
       particles.rain(h.palm.x, RAIN.halfWidth, Math.ceil(700 * dt * h.blend), RAIN.speed);
     }

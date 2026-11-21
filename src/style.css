@@ -485,7 +485,7 @@ body.hall #hall-bg, body.hall #portrait { display: block; }
 body.hall #webcam { opacity: 0; } /* you're drawn inside the frame instead */
 body.hall #mood { display: none; }
 
-/* ================= Clap: the flying witch ================= */
+/* ================= Pop-up friend (pinch) and flying witch (3 circles) ================= */
 #witch-layer {
   position: fixed;
   inset: 0;
