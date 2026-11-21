@@ -1,6 +1,6 @@
 import type { Point2 } from './gestures';
 
-const IMAGE_URL = `${import.meta.env.BASE_URL}costume/clap-character.png`;
+const IMAGE_URL = `${import.meta.env.BASE_URL}costume/pinch-character.png`;
 const ASPECT = 208 / 355; // height / width of the picture
 const POP_MS = 380; // pop in with a bounce
 const STAY_MS = 1500; // bob happily in place
@@ -12,15 +12,15 @@ interface Pop {
   start: number;
   at: Point2;
   size: number;
-  spin: number; // a little random tilt so repeated claps don't look identical
+  spin: number; // a little random tilt so repeated pinches don't look identical
 }
 
-/** The clap character: pops up where your hands met, bobs for a moment, then floats away. */
+/** The pinch character: pops up where you pinched, bobs for a moment, then floats away. */
 export class CharacterPops {
   private pops: Pop[] = [];
 
   constructor(private readonly layer: HTMLElement) {
-    new Image().src = IMAGE_URL; // load it now so the first clap is instant
+    new Image().src = IMAGE_URL; // load it now so the first pinch is instant
   }
 
   launch(at: Point2) {

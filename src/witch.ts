@@ -3,7 +3,7 @@ import type { Point2 } from './gestures';
 const WITCH_URL = `${import.meta.env.BASE_URL}costume/witch-broom.webp`;
 const WITCH_ASPECT = 478 / 640; // height / width of the picture
 const TAIL = { x: 0.1, y: 0.66 }; // the glowing broom tail, as a fraction of the picture
-const POP_MS = 450; // the pop-in at the clap
+const POP_MS = 450; // the pop-in at the fingertip
 const FLY_MS = 3000; // the swoop around the screen and away
 const MAX_WITCHES = 3;
 
@@ -15,7 +15,7 @@ interface Flight {
 }
 
 /**
- * The witch on a broomstick: pops out where you clapped, swoops around the
+ * The witch on a broomstick: pops out at your fingertip, swoops around the
  * screen and flies away, scattering gold sparkles from her broom.
  */
 export class WitchFlights {
@@ -26,7 +26,7 @@ export class WitchFlights {
     /** Called each frame with the broom tail's screen position, to leave sparkles behind. */
     private readonly sparkle: (p: Point2, dt: number) => void,
   ) {
-    // Load the picture right away so the first clap doesn't wait for it.
+    // Load the picture right away so the first launch doesn't wait for it.
     new Image().src = WITCH_URL;
   }
 
@@ -65,7 +65,7 @@ export class WitchFlights {
       let tilt: number;
       let facing: number;
       if (age < POP_MS) {
-        // Pop: grow from nothing with a little overshoot, hovering at the clap.
+        // Pop: grow from nothing with a little overshoot, hovering where she appeared.
         const k = age / POP_MS;
         scale = k < 0.7 ? (k / 0.7) * 1.15 : 1.15 - ((k - 0.7) / 0.3) * 0.15;
         pos = f.path[0];

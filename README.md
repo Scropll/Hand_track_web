@@ -19,9 +19,8 @@ The panel in the bottom-left corner can be hidden with its **−** button; a sma
 | ☝️ Point | A bigger, stronger swarm follows your fingertip |
 | 🖐️ Open palm | It rains in a strip under your hand |
 | ✊ Fist | Scatters every particle outward from your hand |
-| 🤏 Pinch | Fireworks burst, then a stream of sparkles |
+| 🤏 Pinch | A friend (`public/costume/pinch-character.png`) pops up where you pinched, bobs hello and floats away |
 | ✌️ Peace | Switches to the next color theme (starts on glowing blue) |
-| 👏 Clap | A friend (`public/costume/clap-character.png`) pops up where your hands met, bobs hello and floats away |
 | ☝️🔄 Point + 3 circles | Point with one finger and draw three circles: a little witch on a broomstick swoops around the screen and flies away (off while practicing spells) |
 
 ## Dark magic mood (Dim)
@@ -80,8 +79,7 @@ Each spell has its own effect on the particles: Lumos lights the wand tip, Nox d
 - `src/practice.ts` – practice mode: the big guide symbol and following it with the wand
 - `src/spellEffects.ts` – what each spell does to the particles and screen
 - `src/portrait.ts` – Magic Portrait: Hall background, selfie cut-out inside the gold frame (config at the top)
-- `src/clap.ts` – clap detection (two hands rushing together)
-- `src/popCharacter.ts` – the character that pops up on a clap
+- `src/popCharacter.ts` – the character that pops up on a pinch
 - `src/circleGesture.ts` – "point and draw three circles" detection
 - `src/witch.ts` – the flying witch (`public/costume/witch-broom.webp`)
 - `src/main.ts` – connects everything, runs once per frame
