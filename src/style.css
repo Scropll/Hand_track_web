@@ -492,7 +492,7 @@ body.hall #mood { display: none; }
   overflow: hidden;
   pointer-events: none;
 }
-.witch {
+.witch, .pop-character {
   position: absolute;
   left: 0;
   top: 0;
@@ -500,3 +500,4 @@ body.hall #mood { display: none; }
   will-change: transform;
   filter: drop-shadow(0 0 18px rgba(255, 200, 90, 0.45));
 }
+.pop-character { filter: drop-shadow(0 0 14px rgba(160, 210, 255, 0.55)); }
