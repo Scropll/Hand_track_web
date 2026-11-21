@@ -484,3 +484,19 @@ body.calibrating, body.calibrating #stage canvas { cursor: crosshair; }
 body.hall #hall-bg, body.hall #portrait { display: block; }
 body.hall #webcam { opacity: 0; } /* you're drawn inside the frame instead */
 body.hall #mood { display: none; }
+
+/* ================= Clap: the flying witch ================= */
+#witch-layer {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.witch {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: auto;
+  will-change: transform;
+  filter: drop-shadow(0 0 18px rgba(255, 200, 90, 0.45));
+}

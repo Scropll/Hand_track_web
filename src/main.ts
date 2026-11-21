@@ -13,6 +13,8 @@ import { SPELLS, type Spell } from './spells.js';
 import { Spellbook } from './spellbook';
 import { Practice, type SuccessInfo } from './practice';
 import { SpellEffects } from './spellEffects';
+import { ClapDetector } from './clap';
+import { WitchFlights } from './witch';
 
 // ---------- Page elements ----------
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -254,6 +256,20 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && practice.active) stopPractice();
 });
 
+// ---------- Clap: a witch on a broomstick ----------
+const clapDetector = new ClapDetector();
+const witches = new WitchFlights($('witch-layer'), (p, dt) => {
+  const s = toSceneFromScreen(p);
+  particles.emit(s.x, s.y, Math.ceil(500 * dt), 0.05, 0.35); // sparkles from her broom
+});
+
+function onClap(at: Point2) {
+  const s = toSceneFromScreen(at);
+  particles.impulse(s.x, s.y, 0.6, 1.5);
+  particles.emit(s.x, s.y, 400, 0.4, 1.2); // a puff of sparkles where she pops out
+  witches.launch(at);
+}
+
 /** Screen pixels → scene coordinates. */
 function toSceneFromScreen(p: Point2): Point2 {
   return { x: (p.x / window.innerWidth) * 2 * aspect - aspect, y: 1 - (p.y / window.innerHeight) * 2 };
@@ -331,6 +347,8 @@ function frame() {
     const handResult = landmarker.detectForVideo(video, now);
     handleResult(handResult, now);
     wand.detect(video, handResult.landmarks, now);
+    const clap = clapDetector.update(handResult.landmarks, now, video.videoWidth, video.videoHeight);
+    if (clap) onClap(toScreen(clap.x, clap.y));
     // Face tracking feeds both the hat and the vignette; it's skipped when neither is on.
     if (hallOn) portrait.render(video, now, videoRect());
     if (faceLandmarker && (hat.enabled || vignette.enabled)) {
@@ -342,6 +360,7 @@ function frame() {
     }
   }
   hat.update(dt, now);
+  witches.update(now, dt);
   vignette.update(dt, now);
 
   // Forget hands that left the frame a moment ago.

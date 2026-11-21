@@ -21,6 +21,7 @@ The panel in the bottom-left corner can be hidden with its **−** button; a sma
 | ✊ Fist | Scatters every particle outward from your hand |
 | 🤏 Pinch | Fireworks burst, then a stream of sparkles |
 | ✌️ Peace | Switches to the next color theme (starts on glowing blue) |
+| 👏 Clap | A little witch on a broomstick pops out where your hands met, swoops around the screen and flies away |
 
 ## Dark magic mood (Dim)
 
@@ -78,6 +79,8 @@ Each spell has its own effect on the particles: Lumos lights the wand tip, Nox d
 - `src/practice.ts` – practice mode: the big guide symbol and following it with the wand
 - `src/spellEffects.ts` – what each spell does to the particles and screen
 - `src/portrait.ts` – Magic Portrait: Hall background, selfie cut-out inside the gold frame (config at the top)
+- `src/clap.ts` – clap detection (two hands rushing together)
+- `src/witch.ts` – the flying witch (`public/costume/witch-broom.webp`)
 - `src/main.ts` – connects everything, runs once per frame
 - `public/` – the MediaPipe engine (`wasm/`) and hand model, served locally
 
