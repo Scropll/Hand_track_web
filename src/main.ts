@@ -15,6 +15,8 @@ import { Practice, type SuccessInfo } from './practice';
 import { SpellEffects } from './spellEffects';
 import { ClapDetector } from './clap';
 import { WitchFlights } from './witch';
+import { CircleDetector } from './circleGesture';
+import { CharacterPops } from './popCharacter';
 
 // ---------- Page elements ----------
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -182,6 +184,13 @@ function handleResult(result: HandLandmarkerResult, now: number) {
       hand.blend = 0;
       onGestureStart(hand.stabilizer.current, hand);
     }
+
+    // Point and draw three circles: the witch flies. (Not while practicing, where you trace shapes.)
+    let circles = circleDetectors.get(key);
+    if (!circles) circleDetectors.set(key, (circles = new CircleDetector()));
+    const palmPx = Math.hypot(pixels[9].x - pixels[0].x, pixels[9].y - pixels[0].y);
+    const pointing = hand.stabilizer.current === 'point' && !practice.active;
+    if (circles.update(pixels[8], palmPx, pointing, now)) witches.launch(toScreen(lm[8].x, lm[8].y));
   });
 }
 
@@ -256,8 +265,10 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && practice.active) stopPractice();
 });
 
-// ---------- Clap: a witch on a broomstick ----------
+// ---------- Clap: the character pops up. Point + 3 circles: the witch flies ----------
 const clapDetector = new ClapDetector();
+const circleDetectors = new Map<string, CircleDetector>();
+const characterPops = new CharacterPops($('witch-layer'));
 const witches = new WitchFlights($('witch-layer'), (p, dt) => {
   const s = toSceneFromScreen(p);
   particles.emit(s.x, s.y, Math.ceil(500 * dt), 0.05, 0.35); // sparkles from her broom
@@ -266,8 +277,8 @@ const witches = new WitchFlights($('witch-layer'), (p, dt) => {
 function onClap(at: Point2) {
   const s = toSceneFromScreen(at);
   particles.impulse(s.x, s.y, 0.6, 1.5);
-  particles.emit(s.x, s.y, 400, 0.4, 1.2); // a puff of sparkles where she pops out
-  witches.launch(at);
+  particles.emit(s.x, s.y, 400, 0.4, 1.2); // a puff of sparkles where it pops out
+  characterPops.launch(at);
 }
 
 /** Screen pixels → scene coordinates. */
@@ -361,10 +372,16 @@ function frame() {
   }
   hat.update(dt, now);
   witches.update(now, dt);
+  characterPops.update(now);
   vignette.update(dt, now);
 
   // Forget hands that left the frame a moment ago.
-  for (const [key, h] of hands) if (now - h.lastSeen > 300) hands.delete(key);
+  for (const [key, h] of hands) {
+    if (now - h.lastSeen > 300) {
+      hands.delete(key);
+      circleDetectors.delete(key);
+    }
+  }
 
   for (const h of hands.values()) h.blend = Math.min(1, h.blend + dt / 0.5);
 
